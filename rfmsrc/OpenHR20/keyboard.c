@@ -70,18 +70,10 @@ void task_keyboard(void) {
 	uint8_t wheel= keys & (KBI_ROT1 | KBI_ROT2);
 	if ((wheel ^ state_wheel_prev) & KBI_ROT1) {	//only ROT1 have interrupt, change detection
 		if ((wheel == 0) || (wheel == (KBI_ROT1|KBI_ROT2))) {
-#ifdef LCD_UPSIDE_DOWN
-			kb_events |= KB_EVENT_WHEEL_PLUS;
-#else
 			kb_events |= KB_EVENT_WHEEL_MINUS;
-#endif
 			long_quiet = 0;
 		} else {
-#ifdef LCD_UPSIDE_DOWN
-			kb_events |= KB_EVENT_WHEEL_MINUS;
-#else
 			kb_events |= KB_EVENT_WHEEL_PLUS;
-#endif
 			long_quiet = 0;
 		}
 		state_wheel_prev = wheel;
@@ -183,7 +175,7 @@ void task_keyboard_long_press_detect(void) {
 
 /*!
  *******************************************************************************
- * Update mont contact status
+ * Update mount contact status
  *
  *  - create task for keyboard scan and wake up
  *  - read keyboard status
@@ -204,15 +196,18 @@ bool mont_contact_pooling(void){
     #endif
       // low active
     disable_mont_input();
-    if (mont_contact & KBI_MONT) { 
+    if (mont_contact & KBI_MONT) 
+	{ 
         CTL_error |=  CTL_ERR_MONTAGE;
 		sumError=0;
-        return 0;
-    } else {
+        return 0;		// Valve not mounted
+    } 
+	else 
+	{
         CTL_error &= ~CTL_ERR_MONTAGE;
-        if (mont_contact & KBI_C) return 2;
-        if (mont_contact & KBI_PROG) return 3;
-        return 1;
+        if (mont_contact & KBI_C) return 2;				// Switch to manual
+        if (mont_contact & KBI_PROG) return 3;			// Switch to auto
+        return 1;										// Valve mounted, do nothing
     }
 #endif
 }

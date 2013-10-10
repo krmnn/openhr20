@@ -62,8 +62,10 @@
 #define TEMP_CAL_OFFSET 256 // offset of calibration points [ADC units]
 #endif
 #define TEMP_CAL_STEP 500 // step between 2 calibration points [1/100�C]
-#define TEMP_CAL_N 7 // // No. Values
+#define TEMP_CAL_N 7		// // No. Values
 
+
+#define ADC_REMOTE_TEMP_TIMEOUT		10		/* Number of minutes for which remotely set ambient temperature is active */
 
 /*****************************************************************************
 *   Typedefs
@@ -85,4 +87,6 @@ extern int16_t ring_difference[];
 extern int16_t ring_buf_temp_avgs [AVGS_BUFFER_LEN];
 extern uint8_t ring_buf_temp_avgs_pos;
 
+extern uint8_t adcRemoteTimer;					// Determines when ambient temperature last updated remotely
+extern int16_t adcRemoteTemp;					// Remotely set temperature
 

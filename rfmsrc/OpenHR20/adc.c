@@ -54,6 +54,8 @@
 
 // vars
 static uint8_t state_ADC;
+uint8_t adcRemoteTimer;
+int16_t adcRemoteTemp;					// Remotely set temperature
 bool sleep_with_ADC=0;
 
 
@@ -68,7 +70,7 @@ bool sleep_with_ADC=0;
 static int16_t ring_buf[2][AVERAGE_LEN];
 #if ! HW_WINDOW_DETECTION
 	int16_t ring_buf_temp_avgs [AVGS_BUFFER_LEN];
-	uint8_t ring_buf_temp_avgs_pos = 0;
+	uint8_t ring_buf_temp_avgs_pos;
 #endif
 
 static uint8_t ring_pos=0;
@@ -107,7 +109,7 @@ static void update_ring(uint8_t type, int16_t value) {
  *  \returns temperature in 1/100 degrees Celsius (1987: 19,87�C)
  *
  *  \note
- *  - measurment has been performed before using \ref ADC_Measure_Temp
+ *  - measurement has been performed before using \ref ADC_Measure_Temp
  *  - Attention: negative values are possible 
  ******************************************************************************/
 #if 0
@@ -135,7 +137,7 @@ int16_t ADC_Get_Temp_Degree(void)            // Get Temperature in 1/100 Deg �
  *  \returns battery voltage in mV
  *
  *  \note
- *  - measurment has been performed before using \ref ADC_Measure_Ub
+ *  - measurement has been performed before using \ref ADC_Measure_Ub
  *  - Battery voltage = (V_ref * 1024) / ADC_Val_Ub with V_ref=1.1V
  ******************************************************************************/
 static int16_t ADC_Get_Bat_Voltage(uint16_t adc)             // Get Batteriy Voltage in mV
@@ -208,7 +210,8 @@ static int16_t ADC_Convert_To_Degree(int16_t adc)
  * ADC task
  * \note
  ******************************************************************************/
-void start_task_ADC(void) {
+void start_task_ADC(void) 
+{
 	state_ADC=1;
 	// power up ADC
 	power_up_ADC();
@@ -223,13 +226,15 @@ void start_task_ADC(void) {
 	sleep_with_ADC=1;
 }
 #define ADC_TOLERANCE 3
-static int16_t dummy_adc=0;
+static int16_t dummy_adc=0;		// Logs intermediate A-D values to identify wild changes
 /*!
  *******************************************************************************
  * ADC task
  ******************************************************************************/
-bool task_ADC(void) {
-	switch (state_ADC) {
+bool task_ADC(void) 
+{
+	switch (state_ADC) 
+	{
 	case 1: //step 1
 	    // set ADC control and status register
     	ADCSRA = (1<<ADEN)|(1<<ADPS2)|(1<<ADPS0)|(1<<ADIE); // prescaler=32
@@ -238,33 +243,45 @@ bool task_ADC(void) {
 		// start new with same configuration;
 		break;
 	case 3: //step 3
-		{	
+		{
 			int16_t ad = ADCW;
-            if ((ad>dummy_adc+ADC_TOLERANCE)||(ad<dummy_adc-ADC_TOLERANCE)) { 
-                // adc noise protection, repeat measure
-                REPEAT_ADC:
-                dummy_adc=ad;
+			if ((ad>dummy_adc+ADC_TOLERANCE)||(ad<dummy_adc-ADC_TOLERANCE)) 
+			{ 
+				// adc noise protection, repeat measure
+				REPEAT_ADC:
+				dummy_adc=ad;
 				sleep_with_ADC=true;
-                return true;
-            }
+				return true;
+			}
 			#if DEBUG_BATT_ADC
 				COM_printStr16(PSTR("batAD x"),ad);
 			#endif
 			update_ring(BAT_RING_TYPE,ADC_Get_Bat_Voltage(ad));
 
+			if (adcRemoteTimer)
+			{
+				update_ring(TEMP_RING_TYPE, adcRemoteTemp);
+				#if DEBUG_PRINT_MEASURE
+				COM_debug_print_temperature(adcRemoteTemp);
+				#endif
+				shift_ring();
+				state_ADC = 6;			
+				goto STOP_ADC;			// Don't need - A-D for temperature - just stop things
+			}
 			// activate voltage divider
 			ADC_ACT_TEMP_P |= (1<<ADC_ACT_TEMP);
 			ADMUX = ADC_TEMP_MUX | (1<<REFS0);
-		}
-		break;
-	case 2: //step 2
-	case 4: //step 4
+			break;
+		}		
+	case 2: //step 2 - read and discard ADC reading
+	case 4: //step 4 - read and discard ADC reading
         dummy_adc = ADCW;
 	    break;
 	case 5: //step 5
         {
             int16_t ad = ADCW;
-            if ((ad>dummy_adc+ADC_TOLERANCE)||(ad<dummy_adc-ADC_TOLERANCE)) { 
+            if ((ad>dummy_adc+ADC_TOLERANCE)||(ad<dummy_adc-ADC_TOLERANCE)) 
+			{ 
                 // adc noise protection, repeat measure
                 goto REPEAT_ADC; // optimization
             }
@@ -277,6 +294,7 @@ bool task_ADC(void) {
         }
         // do not use break here
 	default:
+	STOP_ADC:
 		// deactivate voltage divider
     	ADC_ACT_TEMP_P &= ~(1<<ADC_ACT_TEMP);
 	    // set ADC control and status register / disable ADC

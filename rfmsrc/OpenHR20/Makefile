@@ -160,8 +160,6 @@ CFLAGS = -g$(DEBUG)
 CFLAGS += $(CDEFS)
 CFLAGS += $(REV)
 CFLAGS += $(RFM)
-CFLAGS += $(RFMFLAGS)
-CFLAGS += $(HRFLAGS)
 CFLAGS += $(TEMP_COMPENSATE_OPTION)
 CFLAGS += $(HW_WINDOW_DETECTION)
 CFLAGS += $(MENU_SHOW_BATTERY)
@@ -171,7 +169,6 @@ CFLAGS += $(CALIBRATION_RESETS_sumError)
 CFLAGS += $(REMOTE_SETTING_ONLY)
 CFLAGS += $(BLOCK_INTEGRATOR_AFTER_VALVE_CHANGE)
 CFLAGS += $(BOOST_CONTROLER_AFTER_CHANGE)
-CFLAGS += $(FLAGS)
 CFLAGS += -O$(OPT)
 CFLAGS += -funsigned-char
 CFLAGS += -funsigned-bitfields
@@ -522,8 +519,6 @@ extcoff: $(TARGET).elf
 	@echo "Configuration" >> $@
 	@echo "Hardware type $(HW)" >> $@
 	@echo "RFM=$(RFM)" >> $@
-	@echo "RFMFLAGS=$(RFMFLAGS)" >> $@
-	@echo "HRFLAGS=$(HRFLAGS)" >> $@
 	@echo "HW_WINDOW_DETECTION=$(HW_WINDOW_DETECTION)" >> $@
 	@echo "==================================" >> $@
 	@echo >> $@

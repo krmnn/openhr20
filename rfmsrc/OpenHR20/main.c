@@ -28,8 +28,8 @@
  * \file       main.c
  * \brief      the main file for Open HR20 project
  * \author     Dario Carluccio <hr20-at-carluccio-dot-de>; Jiri Dobry <jdobry-at-centrum-dot-cz>
- * \date       $Date$
- * $Rev$
+ * \date       $Date: 2011-04-04 20:14:19 +0100 (Mon, 04 Apr 2011) $
+ * $Rev: 359 $
  */
 
 // AVR LibC includes
@@ -80,6 +80,8 @@ void callback_settemp(uint8_t);            // called from RTC to set new reftemp
 void setautomode(bool);                    // activate/deactivate automode
 uint8_t input_temp(uint8_t);
 
+volatile uint8_t serialInProgress = 1;		// Permanently active for testing - should block sleep
+
 // Check AVR LibC Version >= 1.6.0
 #if __AVR_LIBC_VERSION__ < 10600UL
 #warning "avr-libc >= version 1.6.0 recommended"
@@ -126,25 +128,34 @@ int __attribute__ ((noreturn)) main(void)
     ****************************************************************************
     * main loop
     ***************************************************************************/
-    for (;;){
+    for (;;)
+	{
 		// go to sleep with ADC conversion start
 		asm volatile ("cli");
         if (
-          ! task &&
-          ((ASSR & (_BV(OCR2UB)|_BV(TCN2UB)|_BV(TCR2UB))) == 0) // ATmega169 datasheet chapter 17.8.1
-            ) {
+          (! task) &&
+          ((ASSR & (_BV(OCR2UB)|_BV(TCN2UB)|_BV(TCR2UB))) == 0) // ATmega169 datasheet chapter 17.8.1 - block sleep if TC2 updating
+            ) 
+		{
   			// nothing to do, go to sleep
-            if(timer0_need_clock() || RS_need_clock()) {
-			    SMCR = (0<<SM1)|(0<<SM0)|(1<<SE); // Idle mode
-            } else {
-    			if (sleep_with_ADC) {
-    				SMCR = (0<<SM1)|(1<<SM0)|(1<<SE); // ADC noise reduction mode
-				} else {
-				    SMCR = (1<<SM1)|(1<<SM0)|(1<<SE); // Power-save mode
+            if(timer0_need_clock() || RS_need_clock() || serialState ) // serialInProgress) 
+			{
+			    SMCR = (0<<SM2)|(0<<SM1)|(0<<SM0)|(1<<SE);		// Idle mode - CPU stopped; most peripherals still active
+            } 
+			else 
+			{
+    			if (sleep_with_ADC) 
+				{
+    				SMCR = (0<<SM2)|(0<<SM1)|(1<<SM0)|(1<<SE);	// ADC noise reduction mode - CPU stopped; I/O clk stopped; otherwise most peripherals still active
+				} 
+				else 
+				{
+				    SMCR = (0<<SM2)|(1<<SM1)|(1<<SM0)|(1<<SE);	// Power-save mode - timer-counter 2 and LCD still run (and external interrupts)
                 }
             }
 
-			if (sleep_with_ADC) {
+			if (sleep_with_ADC) 
+			{
 				sleep_with_ADC=false;
 				// start conversions
 		        ADCSRA |= (1<<ADSC);
@@ -155,14 +166,17 @@ int __attribute__ ((noreturn)) main(void)
 			asm volatile ("sleep");
 			asm volatile ("nop");
 			DEBUG_AFTER_SLEEP();
-			SMCR = (1<<SM1)|(1<<SM0)|(0<<SE); // Power-save mode
-		} else {
+			SMCR = (0<<SM2)|(1<<SM1)|(1<<SM0)|(0<<SE); // Power-save mode
+		} 
+		else 
+		{
 			asm volatile ("sei");
 		}
 
 		#if RFM
 		  // RFM12
-		  if (task & TASK_RFM) {
+		  if (task & TASK_RFM) 
+		  {
 			task &= ~TASK_RFM;
 
 			if (rfm_mode == rfmmode_tx_done)
@@ -178,50 +192,57 @@ int __attribute__ ((noreturn)) main(void)
 		#endif
 
         // update LCD task
-		if (task & TASK_LCD) {
+		if (task & TASK_LCD) 
+		{
 			task&=~TASK_LCD;
 			task_lcd_update();
 			continue; // on most case we have only 1 task, improve time to sleep
 		}
 
-		if (task & TASK_ADC) {
+		if (task & TASK_ADC) 
+		{
 			task&=~TASK_ADC;
-			if (!task_ADC()) {
+			if (!task_ADC()) 
+			{
                 // ADC is done
             }
 			continue; // on most case we have only 1 task, improve time to sleep
 		}
 
         // communication
-		if (task & TASK_COM) {
+		if (task & TASK_COM) 
+		{
 			task&=~TASK_COM;
 			COM_commad_parse();
 			continue; // on most case we have only 1 task, improve time to sleep
 		}
 
         // motor stop
-        if (task & TASK_MOTOR_STOP) {
+        if (task & TASK_MOTOR_STOP) 
+		{
             task&=~TASK_MOTOR_STOP;
             MOTOR_timer_stop();
 			continue; // on most case we have only 1 task, improve time to sleep
         }
 
 		//! check keyboard and set keyboards events
-		if (task & TASK_KB) {
+		if (task & TASK_KB) 
+		{
 			task&=~TASK_KB;
 			task_keyboard();
 		}
 
-        if (task & TASK_RTC) {
+        if (task & TASK_RTC) 
+		{
             task&=~TASK_RTC;
 			#if (HW_WINDOW_DETECTION)
 				PORTE |= _BV(PE2); // enable pull-up
 			#endif
-            if (RTC_timer_done&_BV(RTC_TIMER_RTC))
+            if (RTC_timer_done & _BV(RTC_TIMER_RTC))
             {
                 RTC_AddOneSecond();
             }
-            if (RTC_timer_done&(_BV(RTC_TIMER_OVF)|_BV(RTC_TIMER_RTC)))
+            if (RTC_timer_done & (_BV(RTC_TIMER_OVF)|_BV(RTC_TIMER_RTC)))
             {
                 cli(); RTC_timer_done&=~(_BV(RTC_TIMER_OVF)|_BV(RTC_TIMER_RTC)); sei();
                 #if (DEBUG_PRINT_RTC_TICKS)
@@ -230,7 +251,9 @@ int __attribute__ ((noreturn)) main(void)
                 #endif
                 bool minute=(RTC_GetSecond()==0);
                 CTL_update(minute);
-                if (minute) {
+                if (minute) 
+				{
+					if (adcRemoteTimer) adcRemoteTimer--;			// Decrement this once/minute
                     if (((CTL_error &  (CTL_ERR_BATT_LOW | CTL_ERR_BATT_WARNING)) == 0)
     			        && (RTC_GetDayOfWeek()==6)
     				    && (RTC_GetHour()==10)
@@ -241,9 +264,11 @@ int __attribute__ ((noreturn)) main(void)
                         MOTOR_updateCalibration(0);
                     }
 					#if (! HW_WINDOW_DETECTION)
-                    	if (CTL_mode_window!=0) {
+                    	if (CTL_mode_window!=0) 
+						{
                         	CTL_mode_window--;
-                        	if (CTL_mode_window==0) {
+                        	if (CTL_mode_window==0) 
+							{
                            		PID_force_update = 0;
                         	}
                     	}
@@ -271,7 +296,7 @@ int __attribute__ ((noreturn)) main(void)
                                     ((wl_force_flags>>config.RFM_devaddr)&1)
                                 )
                             )
-                        )) // collission protection: every HR20 shall send when the second counter is equal to it's own address.
+                        )) // collision protection: every HR20 shall send when the second counter is equal to it's own address.
     				{
                         wirelessTimerCase = WL_TIMER_FIRST;
                         RTC_timer_set(RTC_TIMER_RFM, WLTIME_START);
@@ -291,16 +316,19 @@ int __attribute__ ((noreturn)) main(void)
 							}
                     }
                 #endif
-                if (bat_average>0) {
-                  MOTOR_updateCalibration(mont_contact_pooling());
-                  MOTOR_Goto(valve_wanted);
+                if (bat_average>0) 
+				{
+					MOTOR_updateCalibration(mont_contact_pooling());	// Check calibration state; start new cal if necessary
+					MOTOR_Goto(valve_wanted);				// Update required motor position once/second
                 }
                 task_keyboard_long_press_detect();
-                if ((MOTOR_Dir==stop) || (config.allow_ADC_during_motor)) start_task_ADC();
-                if (menu_auto_update_timeout>=0) {
+                if ((MOTOR_Dir==stop) || (config.allow_ADC_during_motor)) start_task_ADC();		// A-D once/second if permitted
+                if (menu_auto_update_timeout>=0) 
+				{
                     menu_auto_update_timeout--;
                 }
                 menu_view(false); // TODO: move it, it is wrong place
+                LCD_Update(); // TODO: move it, it is wrong place
             }
             #if RFM
               if (RTC_timer_done&_BV(RTC_TIMER_RFM))
@@ -313,17 +341,21 @@ int __attribute__ ((noreturn)) main(void)
         }
 
 		// menu state machine
-		if (kb_events || (menu_auto_update_timeout==0)) {
+		if (kb_events || (menu_auto_update_timeout==0)) 
+		{
            bool update = menu_controller(false);
-           if (update) {
+           if (update) 
+		   {
                menu_controller(true); // menu updated, call it again
            }
            menu_view(update); // TODO: move it, it is wrong place
-	        continue; // on most case we have only 1 task, improve time to sleep
+	       LCD_Update(); // TODO: move it, it is wrong place
+			continue; // on most case we have only 1 task, improve time to sleep
 		}
 
         // update motor PWM
-        if (task & TASK_MOTOR_PULSE) {
+        if (task & TASK_MOTOR_PULSE) 
+		{
             task&=~TASK_MOTOR_PULSE;
             MOTOR_updateCalibration(mont_contact_pooling());
             MOTOR_timer_pulse();
@@ -337,7 +369,11 @@ int __attribute__ ((noreturn)) main(void)
 FUSES =
 {
     .low = (uint8_t)(FUSE_CKSEL0 & FUSE_CKSEL2 & FUSE_CKSEL3 & FUSE_SUT0 & FUSE_CKDIV8),  //0x62
-    .high = (uint8_t)(FUSE_BOOTSZ0 & FUSE_BOOTSZ1 & FUSE_EESAVE & FUSE_SPIEN & FUSE_JTAGEN),
+	#if DEBUG_ENABLE
+    .high = (uint8_t)(FUSE_BOOTSZ0 & FUSE_BOOTSZ1 & FUSE_EESAVE & FUSE_SPIEN & FUSE_JTAGEN & FUSE_OCDEN),		// OCDEN added to permit debugging
+	#else
+    .high = (uint8_t)(FUSE_BOOTSZ0 & FUSE_BOOTSZ1 & FUSE_EESAVE & FUSE_SPIEN & FUSE_JTAGEN),		// OCD not possible
+	#endif
     .extended = (uint8_t)(FUSE_BODLEVEL0),
 };
 #else
@@ -366,7 +402,7 @@ static inline void init(void)
 
 
 
-    //! Calibrate the internal RC Oszillator
+    //! Calibrate the internal RC Oscillator
     //! \todo test calibrate_rco();
 
     //! set Clock to 4 Mhz
@@ -397,15 +433,9 @@ static inline void init(void)
 #if (RFM_WIRE_MARIOJTAG == 1)
     DDRE  = (1<<PE3)|                  (1<<PE1); // ACTLIGHTEYE | TXD
 	PORTE =                            (1<<PE1)|(1<<PE0); // TXD | RXD
-	//PORTE =                            (1<<PE1)|(1<<PE0); // TXD | RXD
+
 	DDRF  =          (1<<PF6)|(1<<PF5)|(1<<PF4)|(1<<PF3); // RFMSDI | RFMNSEL | RFMSCK | ACTTEMPSENS
     PORTF = (1<<PF7)|         (1<<PF5); // JTAGTDI | RFMNSEL;
-
-#elif (RFM_WIRE_TK_INTERNAL == 1)
-    DDRE  = (1<<PE3)|(1<<PE1);                      // output: lighteye | TxD
-    PORTE = (1<<PE0)|(1<<PE1)|(1<<PE2);             // pullup/activate: RxD | TxD | PE2
-    DDRF  = (1<<PF0)|(1<<PF1)|(1<<PF3)|(1<<PF7);    // output: RFMnSEL | RFMSCK | tempsensor | RFMSDI
-    PORTF = (1<<PF0)|(1<<PF4)|(1<<PF5)|(1<<PF6);    // pullup/activate: RFMnSel, TCK, TMS, TDO
 
 #elif (RFM_WIRE_JD_INTERNAL == 1)
     DDRE  = (1<<PE3)|(1<<PE1);  // PE3  activate lighteye
@@ -422,8 +452,13 @@ static inline void init(void)
     PORTF = 0xf5;
 
 #else //HR20 without RFM
-    DDRE = (1<<PE3)|(1<<PE1);  // PE3  activate lighteye
+    DDRE = (1<<PE3)|(1<<PE1);			// PE3  activate lighteye. PE1 is TxD
     PORTE = (1<<PE2)|(1<<PE1)|(1<<PE0); // PE2 | TXD | RXD(pullup);
+
+    #if defined COM_RS485				// 2-wire serial comms
+    DDRE |= (1<<PE2);			// PE2 is Tx enable when low
+    #endif
+
     DDRF = (1<<PF3);          // PF3  activate tempsensor
     PORTF = 0xf3;
 #endif

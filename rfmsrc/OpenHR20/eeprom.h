@@ -49,54 +49,59 @@
 
 typedef struct { // each variables must be uint8_t or int8_t without exception
     /* 00 */ uint8_t lcd_contrast;
-    /* 01 */ uint8_t temperature0;   //!< temperature 0  - frost protection (unit is 0.5stC)
-    /* 02 */ uint8_t temperature1;   //!< temperature 1  - energy save (unit is 0.5stC)
-    /* 03 */ uint8_t temperature2;   //!< temperature 2  - comfort (unit is 0.5stC)
-    /* 04 */ uint8_t temperature3;   //!< temperature 3  - supercomfort (unit is 0.5stC)
-    /* 05 */ uint8_t P3_Factor;  //!< Proportional cubic tuning constant
-    /* 06 */ uint8_t P_Factor;  //!< Proportional tuning constant
-    /* 07 */ uint8_t I_Factor;  //!< Integral tuning constant
-    /* 08 */ uint8_t I_max_credit;  //!< credit for interator limitation
-    /* 09 */ uint8_t I_credit_expiration; //!< unit is PID_interval
-    /* 0a */ uint8_t PID_interval; //!< PID_interval*5 = interval in seconds    
-    /* 0b */ uint8_t valve_min; //!< valve position limiter min
-    /* 0c */ uint8_t valve_center;  //!< default valve position for "zero - error" - improve stabilization after change temperature
-    /* 0d */ uint8_t valve_max; //!< valve position limiter max
-    /* 0e */ uint8_t valve_hysteresis; //!< valve movement hysteresis (unit is 1/128%)
-    /* 0f */ uint8_t motor_pwm_min;   //!< min PWM for motor 
-    /* 10 */ uint8_t motor_pwm_max;  //!< max PWM for motor
-    /* 11 */ uint8_t motor_eye_low;  //!< min signal lenght to accept low level (multiplied by 2)
-    /* 12 */ uint8_t motor_eye_high; //!< min signal lenght to accept high level (multiplied by 2)
+    /* 01 */ uint8_t temperature0;			//!< temperature 0  - frost protection (unit is 0.5stC)
+    /* 02 */ uint8_t temperature1;			//!< temperature 1  - energy save (unit is 0.5stC)
+    /* 03 */ uint8_t temperature2;			//!< temperature 2  - comfort (unit is 0.5stC)
+    /* 04 */ uint8_t temperature3;			//!< temperature 3  - supercomfort (unit is 0.5stC)
+    /* 05 */ uint8_t P3_Factor;				//!< Proportional cubic tuning constant
+    /* 06 */ uint8_t P_Factor;				//!< Proportional tuning constant
+    /* 07 */ uint8_t I_Factor;				//!< Integral tuning constant
+    /* 08 */ uint8_t I_max_credit;			//!< credit for interator limitation
+    /* 09 */ uint8_t I_credit_expiration;	//!< unit is PID_interval
+    /* 0a */ uint8_t PID_interval;			//!< PID_interval*5 = interval in seconds    
+    /* 0b */ uint8_t valve_min;				//!< valve position limiter min
+    /* 0c */ uint8_t valve_center;			//!< default valve position for "zero - error" - improve stabilization after change temperature
+    /* 0d */ uint8_t valve_max;				//!< valve position limiter max
+    /* 0e */ uint8_t valve_hysteresis;		//!< valve movement hysteresis (unit is 1/128%)
+    /* 0f */ uint8_t motor_pwm_min;			//!< min PWM for motor 
+    /* 10 */ uint8_t motor_pwm_max;			//!< max PWM for motor
+    /* 11 */ uint8_t motor_eye_low;			//!< min signal length to accept low level (multiplied by 2)
+    /* 12 */ uint8_t motor_eye_high;		//!< min signal length to accept high level (multiplied by 2)
     /* 13 */ uint8_t motor_close_eye_timeout; //!<time from last pulse to disable eye [1/61sec]
-    /* 14 */ uint8_t motor_end_detect_cal; //!< stop timer threshold in % to previous average 
-    /* 15 */ uint8_t motor_end_detect_run; //!< stop timer threshold in % to previous average 
-    /* 16 */ uint8_t motor_speed; //!< /8 
+    /* 14 */ uint8_t motor_end_detect_cal;	//!< stop timer threshold in % to previous average 
+    /* 15 */ uint8_t motor_end_detect_run;	//!< stop timer threshold in % to previous average 
+    /* 16 */ uint8_t motor_speed;			//!< /8 
     /* 17 */ uint8_t motor_speed_ctl_gain;
     /* 18 */ uint8_t motor_pwm_max_step;
     /* 19 */ uint8_t MOTOR_ManuCalibration_L;
     /* 1a */ uint8_t MOTOR_ManuCalibration_H;
-    /* 1b */ uint8_t temp_cal_table0; //!< temperature calibration table
-    /* 1c */ uint8_t temp_cal_table1; //!< temperature calibration table
-    /* 1d */ uint8_t temp_cal_table2; //!< temperature calibration table
-    /* 1e */ uint8_t temp_cal_table3; //!< temperature calibration table
-    /* 1f */ uint8_t temp_cal_table4; //!< temperature calibration table
-    /* 20 */ uint8_t temp_cal_table5; //!< temperature calibration table
-    /* 21 */ uint8_t temp_cal_table6; //!< temperature calibration table
-    /* 22 */ uint8_t timer_mode; //!< =0 only one program, =1 programs for weekdays
-    /* 23 */ uint8_t bat_warning_thld; //!< treshold for battery warning [unit 0.02V]=[unit 0.01V per cell]
-    /* 24 */ uint8_t bat_low_thld; //!< threshold for battery low [unit 0.02V]=[unit 0.01V per cell]
+    /* 1b */ uint8_t temp_cal_table0;		//!< temperature calibration table
+    /* 1c */ uint8_t temp_cal_table1;		//!< temperature calibration table
+    /* 1d */ uint8_t temp_cal_table2;		//!< temperature calibration table
+    /* 1e */ uint8_t temp_cal_table3;		//!< temperature calibration table
+    /* 1f */ uint8_t temp_cal_table4;		//!< temperature calibration table
+    /* 20 */ uint8_t temp_cal_table5;		//!< temperature calibration table
+    /* 21 */ uint8_t temp_cal_table6;		//!< temperature calibration table
+    /* 22 */ uint8_t timer_mode;			//!< =0 only one program, =1 programs for weekdays
+    /* 23 */ uint8_t bat_warning_thld;		//!< threshold for battery warning [unit 0.02V]=[unit 0.01V per cell]
+    /* 24 */ uint8_t bat_low_thld;			//!< threshold for battery low [unit 0.02V]=[unit 0.01V per cell]
     /* 25 */ uint8_t allow_ADC_during_motor;
 #if HW_WINDOW_DETECTION
     /* 26 */ uint8_t window_open_detection_enable;
-    /* 27 */ uint8_t window_open_detection_delay; //!< window open detection delay [sec]
-    /* 28 */ uint8_t window_close_detection_delay; //!< window close detection delay [sec]
+    /* 27 */ uint8_t window_open_detection_delay;	//!< window open detection delay [sec]
+    /* 28 */ uint8_t window_close_detection_delay;	//!< window close detection delay [sec]
+    /* 29 */ uint8_t dummy1;				// Padding to keep the two layouts the same
+    /* 2a */ uint8_t dummy2;				// Padding to keep the two layouts the same
+    /* 2b */ uint8_t dummy3;				// Padding to keep the two layouts the same
 #else
     /* 26 */ uint8_t window_open_detection_diff; //!< threshold for window open detection unit is 0.1C
     /* 27 */ uint8_t window_close_detection_diff; //!< threshold for window close detection unit is 0.1C
     /* 28 */ uint8_t window_open_detection_time;
     /* 29 */ uint8_t window_close_detection_time;
     /* 2a */ uint8_t window_open_timeout;           //!< maximum time for window open state [minutes]
+	/* 2b */ uint8_t window_detection_mode;			// Flag = 0 for S/W detection; 1 if status set over serial (added SHD)
 #endif
+	/* 2c */ uint8_t RS485_address;				//	Serial address (as offset within protocol) - permanently allocated field
 #if BOOST_CONTROLER_AFTER_CHANGE
 	/*    */ uint8_t  temp_boost_setpoint_diff;
 	/*    */ uint8_t  temp_boost_hystereses;
@@ -111,14 +116,10 @@ typedef struct { // each variables must be uint8_t or int8_t without exception
 #if (RFM==1)
 	/*    */ uint8_t RFM_devaddr; //!< HR20's own device address in RFM radio networking. =0 mean disable radio
 	/*    */ uint8_t security_key[8]; //!< key for encrypted radio messasges
- #if (RFM_TUNING>0)
-	/*    */ int8_t RFM_freqAdjust; //!< RFM12 Frequency adjustment
-	/*    */ uint8_t RFM_tuning; //!< RFM12 tuning mode
- #endif
     /* unused */ 
 #endif
-
 } config_t;
+
 
 extern config_t config;
 #define config_raw ((uint8_t *) &config)
@@ -136,14 +137,11 @@ extern uint8_t EEPROM ee_layout;
 #define BOOT_ON2      (16*60+0x2000) //!<  16:00
 #define BOOT_OFF2     (21*60+0x1000) //!<  21:00
 
-#if (HW_WINDOW_DETECTION)
-#define EE_LAYOUT (0x15) 
-#else
-#define EE_LAYOUT (0x14) 
-#endif
 #if (BOOST_CONTROLER_AFTER_CHANGE) || (TEMP_COMPENSATE_OPTION)
 	#define EE_LAYOUT (0xff) 
 	// for this options we haven't reserved EE_LAYOUT number yet
+#else
+#define EE_LAYOUT (0xff)			/* Same layout number for most options */
 #endif
 
 #ifdef __EEPROM_C__
@@ -195,7 +193,7 @@ uint8_t EEPROM ee_reserved2_60 [60] = {
     #error D_Factor have not EEPROM configuration
 #endif
 
-uint8_t EEPROM ee_config[][4] ={  // must be alligned to 4 bytes
+uint8_t EEPROM ee_config[][4] ={  // must be aligned to 4 bytes
 // order on this table depend to config_t
 // /*idx*/ {value,  default,    min,    max},
   /* 00 */  {14,        14,         0,      15},    //!< lcd_contrast  (unit 0.5stC)
@@ -250,12 +248,19 @@ uint8_t EEPROM ee_config[][4] ={  // must be alligned to 4 bytes
   /* 26 */  {1,           1,        0,        1},   //!< window_open_detection_enable
   /* 27 */  {5,           5,        0,      240},   //!< window_open_detection_delay [sec] max 4 minutes
   /* 28 */  {5,           5,        0,      240},   //!< window_close_detection_delay [sec] max 4 minutes
+  /* 29 */  {0,           0,        0,      255},   //Placeholder
+  /* 2a */  {0,           0,        0,      255},   //Placeholder
+  /* 2b */  {0,           0,        0,      255},   //Placeholder
 #else
   /* 26 */  {50,         50,        7,      255},   //!< window_open_detection_diff; reshold for window open/close detection unit is 0.01C
   /* 27 */  {50,         50,        7,      255},   //!< window_close_detection_diff; reshold for window open/close detection unit is 0.01C
   /* 28 */  {8,           8,  1, AVGS_BUFFER_LEN},  //!< window_open_detection_time unit 15sec = 1/4min
   /* 29 */  {8,           8,  1, AVGS_BUFFER_LEN},  //!< window_close_detection_time unit 15sec = 1/4min
   /* 2a */  {90,         90,        2,      255},   //!< window_open_timeout
+  /* 2b */  {0,           0,        0,        1},   //!< window_detection_mode
+#endif
+#if COM_RS485 || COM_RS232
+  /* 2c */  {1, COM_DEF_ADR,        1,       63},   //Serial address (as offset within protocol)
 #endif
 #if BOOST_CONTROLER_AFTER_CHANGE
   /*    */  {50,           0,        0,      255},   //!< temp_boost_setpoint_diff, unit 0,01°C
@@ -278,19 +283,13 @@ uint8_t EEPROM ee_config[][4] ={  // must be alligned to 4 bytes
   /*    */  {SECURITY_KEY_5, SECURITY_KEY_5, 0x00, 0xff},   //!< security_key[5] for encrypted radio messasges
   /*    */  {SECURITY_KEY_6, SECURITY_KEY_6, 0x00, 0xff},   //!< security_key[6] for encrypted radio messasges
   /*    */  {SECURITY_KEY_7, SECURITY_KEY_7, 0x00, 0xff},   //!< security_key[7] for encrypted radio messasges
- #if (RFM_TUNING>0)
-  /*    */  {0, 0, 0x00, 0xff},   //!< RFM12 Frequency adjustment, 2's complement
-  /*    */  {RFM_TUNING_MODE, 0, 0x00, 0x01},   //!< RFM12 tuning mode, 0 = tuning mode off (narrow, high data rate), 1 = tuning mode on (wide, low data rate)
- #endif
 #endif
 };
-
 #endif //__EEPROM_C__
 
 
 uint8_t config_read(uint8_t cfg_address, uint8_t cfg_type);
 uint8_t EEPROM_read(uint16_t address);
-void EEPROM_write(uint16_t address, uint8_t data);
 void eeprom_config_init(bool restore_default);
 void eeprom_config_save(uint8_t idx);
 

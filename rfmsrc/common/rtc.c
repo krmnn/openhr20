@@ -68,7 +68,7 @@ rtc_t RTC = {
 
 uint8_t RTC_DS;     //!< Daylightsaving Flag
 #ifdef RTC_TICKS
-    uint32_t RTC_Ticks=0; //!< Ticks since last Reset
+    uint32_t RTC_Ticks=0; //!< Ticks since last Reset (in seconds)
 #endif
 
 // prototypes
@@ -107,22 +107,18 @@ void RTC_Init(void)
         TIMSK2 &= ~(1<<TOIE2);              // disable OCIE2A and TOIE2
         ASSR = (1<<AS2);                    // Timer2 asynchronous operation
         TCNT2 = 0;                          // clear TCNT2A
-        TCCR2A |= TCCR2A_INIT;    // select precaler: 32.768 kHz / 128 =
+        TCCR2A |= TCCR2A_INIT;				// select prescaler: 32.768 kHz / 128 =
                                             // => 1 sec between each overflow
     	
     	// wait for TCN2UB and TCR2UB to be cleared
         while((ASSR & (_BV(TCN2UB)|_BV(TCR2UB))) != 0);
     
         TIFR2 = 0xFF;                       // clear interrupt-flags
-        TIMSK2 |= (1<<TOIE2);               // enable Timer2 overflow interrupt
+        TIMSK2 |= (1<<TOIE2);				// enable Timer2 overflow interrupt
     #else
-#if (NANODE == 1)
-#define TIFR TIFR1
-#define TIMSK TIMSK1
-#endif
-		OCR1A = (F_CPU/800)-1; // 1/100s interrupt
-    	TCCR1B= _BV(CS11) | _BV(WGM12); // clk/8 CTC mode
-    	TIFR  = _BV(OCF1A);                       // clear interrupt-flags
+    	OCR1A = 12500-1; 					// 1/100s interrupt
+    	TCCR1B= _BV(CS11) | _BV(WGM12); 	// clk/8 CTC mode
+    	TIFR  = _BV(OCF1A);  				// clear interrupt-flags
     	TIMSK |= _BV(OCIE1A);
     #endif
 
@@ -215,7 +211,7 @@ void RTC_SetSecond100(uint8_t second100)
 /*!
  *******************************************************************************
  *
- *  set timer for one timerslot for one weekday
+ *  set timer for one timer slot for one weekday
  *
  *  \param dow day of week
  *  \param slot timeslot number
@@ -276,8 +272,8 @@ uint16_t RTC_DowTimerGet(rtc_dow_t dow, uint8_t slot, timermode_t *timermode)
  *
  ******************************************************************************/
 
-static uint8_t RTC_FindTimerRawIndex(uint8_t dow,uint16_t time_minutes) {
-    
+static uint8_t RTC_FindTimerRawIndex(uint8_t dow,uint16_t time_minutes) 
+{
     uint8_t search_timers=(dow>0)?8:2;
     int8_t raw_index=-1;
     uint8_t i;
@@ -345,6 +341,7 @@ int32_t RTC_DowTimerGetHourBar(uint8_t dow) {
  *******************************************************************************
  *
  *  get actual temperature from timers
+ *	Get demand temperature appropriate to time of day - one of four values
  *  
  *  \param exact=true time must be equal  
  *
@@ -352,14 +349,16 @@ int32_t RTC_DowTimerGetHourBar(uint8_t dow) {
  *
  ******************************************************************************/
 
-uint8_t RTC_ActualTimerTemperature(bool exact) {
-    uint16_t minutes=RTC.hh*60 + RTC.mm;
-    int8_t dow=((config.timer_mode==1)?RTC.DOW:0);
-    int8_t raw_index=RTC_FindTimerRawIndex(dow,minutes);
+uint8_t RTC_ActualTimerTemperature(bool exact) 
+{
+    uint16_t minutes = RTC.hh*60 + RTC.mm;
+    int8_t dow = ((config.timer_mode==1) ? RTC.DOW : 0);		// Check whether different time each day?
+    int8_t raw_index = RTC_FindTimerRawIndex(dow,minutes);
     uint16_t data = eeprom_timers_read_raw(raw_index);
-    if (raw_index<0) return 0; //not found
-    if (exact) {
-        if ((data&0xfff) != minutes) return 0;
+    if (raw_index < 0) return 0; //not found
+    if (exact) 
+	{
+        if ((data & 0xfff) != minutes) return 0;
         if ((raw_index/RTC_TIMERS_PER_DOW) != dow) return 0;
     }
     return temperature_table[(data >> 12) & 3];
@@ -618,7 +617,8 @@ void RTC_timer_set(uint8_t timer_id, uint8_t time) {
      ******************************************************************************/
     #if !TASK_IS_SFR || DEBUG_PRINT_RTC_TICKS
     // not optimized
-    ISR(TIMER2_OVF_vect) {
+    ISR(TIMER2_OVF_vect) 
+	{
         task |= TASK_RTC;   // increment second and check Dow_Timer
         RTC_timer_done |= _BV(RTC_TIMER_OVF) | _BV(RTC_TIMER_RTC);
         #if (DEBUG_PRINT_RTC_TICKS)
@@ -627,7 +627,8 @@ void RTC_timer_set(uint8_t timer_id, uint8_t time) {
     }
     #else
     // optimized
-    ISR_NAKED ISR (TIMER2_OVF_vect) {
+    ISR_NAKED ISR (TIMER2_OVF_vect) 
+	{
         asm volatile(
             "__my_tmp_reg__ = 16" "\n"
             /* prologue */
@@ -659,20 +660,24 @@ void RTC_timer_set(uint8_t timer_id, uint8_t time) {
      *  \note - disable this interrupt 
      *
      ******************************************************************************/
-    ISR(TIMER2_COMP_vect) {
+    ISR(TIMER2_COMP_vect) 
+	{
 		uint8_t t2=TCNT2-1;
         task |= TASK_RTC;
         #if (DEBUG_PRINT_RTC_TICKS)
             COM_putchar('%');
         #endif
-        if ((RTC_timer_todo&_BV(RTC_TIMER_KB)) && (t2==RTC_timer_time[RTC_TIMER_KB-1])) { 
+        if ((RTC_timer_todo&_BV(RTC_TIMER_KB)) && (t2==RTC_timer_time[RTC_TIMER_KB-1])) 
+		{ 
             kb_timeout=true;   // keyboard noise cancelation
             RTC_timer_todo &= ~_BV(RTC_TIMER_KB);
         }
         {
             uint8_t i;
-            for (i=2;i<=RTC_TIMERS;i++) {
-                if ((RTC_timer_todo&_BV(i)) && (t2==RTC_timer_time[i-1])) { 
+            for (i=2;i<=RTC_TIMERS;i++) 
+			{
+                if ((RTC_timer_todo&_BV(i)) && (t2==RTC_timer_time[i-1])) 
+				{ 
                    RTC_timer_done |= _BV(i);
                    RTC_timer_todo &= ~_BV(i);
                 }
@@ -680,15 +685,19 @@ void RTC_timer_set(uint8_t timer_id, uint8_t time) {
         }
         uint8_t dif=255;
         uint8_t i,next;  // next is uninitialized, it is correct
-        for (i=0;i<RTC_TIMERS;i++) {
-            if ((RTC_timer_todo&(2<<i))) {
-                if ((RTC_timer_time[i]-t2)<=dif) {
+        for (i=0;i<RTC_TIMERS;i++) 
+		{
+            if ((RTC_timer_todo&(2<<i))) 
+			{
+                if ((RTC_timer_time[i]-t2)<=dif) 
+				{
                     next = RTC_timer_time[i];
                     dif = next-t2;
                 }
             }
         }
-        if (OCR2A != next) {
+        if (OCR2A != next) 
+		{
             // while (ASSR & (1<<OCR2UB)) {;} // ATmega169 datasheet chapter 17.8.1
             // waiting is not needed, it not allow timer state machine
             OCR2A = next;
@@ -706,26 +715,36 @@ void RTC_timer_set(uint8_t timer_id, uint8_t time) {
      *
      ******************************************************************************/
     volatile uint8_t RTC_s100=0;
-    ISR(TIMER1_COMPA_vect) {
-        if (++RTC_s100 >= 100) {
+    ISR(TIMER1_COMPA_vect) 
+	{
+        if (++RTC_s100 >= 100) 
+		{
             task |= TASK_RTC;   // increment second and check Dow_Timer
             RTC_s100 = 0;
             // RTC_timer_done |= _BV(RTC_TIMER_OVF);
         }
-        if (RTC_timer_todo && (RTC_next_compare==RTC_s100)) {
+        if (RTC_timer_todo && (RTC_next_compare==RTC_s100)) 
+		{
             uint8_t i;
-            for (i=1;i<=RTC_TIMERS;i++) {
-                if ((RTC_timer_todo&_BV(i)) && (RTC_s100==RTC_timer_time[i-1])) { 
+            for (i=1;i<=RTC_TIMERS;i++) 
+			{
+                if ((RTC_timer_todo&_BV(i)) && (RTC_s100==RTC_timer_time[i-1])) 
+				{ 
                    RTC_timer_done |= _BV(i);
                    RTC_timer_todo &= ~_BV(i);
                    task |= TASK_TIMER;   // increment second and check Dow_Timer
                 }
-            }                
+            }
+
+			// Work out and store next timer value that needs action
             uint8_t dif=255;
             uint8_t next;
-            for (i=0;i<RTC_TIMERS;i++) {
-                if ((RTC_timer_todo&(2<<i))) {
-                    if ((RTC_timer_time[i]-RTC_s100)<dif) {
+            for (i=0;i<RTC_TIMERS;i++) 
+			{
+                if ((RTC_timer_todo&(2<<i))) 
+				{
+                    if ((RTC_timer_time[i]-RTC_s100)<dif) 
+					{
                         next = RTC_timer_time[i];
                         dif = next-RTC_s100;
                     }

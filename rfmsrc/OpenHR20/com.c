@@ -48,10 +48,20 @@
 #include "eeprom.h"
 #include "controller.h"
 #include "menu.h"
+#include "motor.h"
 #include "../common/wireless.h"
 #include "debug.h"
 
 
+static volatile uint8_t COM_requests;			// Counter for number of received messages
+
+#ifdef COM_RS485
+#include "../common/serialComms.c"
+
+
+#else
+
+XXX
 #define TX_BUFF_SIZE 128
 #define RX_BUFF_SIZE 32
 
@@ -67,71 +77,85 @@ static uint8_t rx_buff_out=0;
 
 /*!
  *******************************************************************************
- *  \brief transmit bytes
+ *  \brief transmit bytes - add one to transmit buffer
  *
  *  \note
  ******************************************************************************/
-void COM_putchar(char c) {
+void COM_putchar(char c) 
+{
 	cli();
-	if ((tx_buff_in+1)%TX_BUFF_SIZE!=tx_buff_out) {
+	if ((tx_buff_in+1)%TX_BUFF_SIZE!=tx_buff_out) 
+	{
 		tx_buff[tx_buff_in++]=c;
 		tx_buff_in%=TX_BUFF_SIZE;
 	}
 	sei();
 }
 
+
 /*!
  *******************************************************************************
  *  \brief support for interrupt for transmit bytes
  *
- *  \note
+ *  \note Called from H/W driver in rs232_485_hw.c
  ******************************************************************************/
-char COM_tx_char_isr(void) {
+char COM_tx_char_isr(void) 
+{
 	char c='\0';
-	if (tx_buff_in!=tx_buff_out) {
+	if (tx_buff_in!=tx_buff_out) 
+	{
 		c=tx_buff[tx_buff_out++];
 		tx_buff_out%=TX_BUFF_SIZE;
 	}
 	return c;
 }
 
-static volatile uint8_t COM_requests; 
+
 /*!
  *******************************************************************************
  *  \brief support for interrupt for receive bytes
  *
- *  \note
+ *  \note  Called from H/W driver in rs232_485_hw.c
  ******************************************************************************/
-void COM_rx_char_isr(char c) {
-	if (c!='\0') {  // ascii based protocol, \0 char is not alloweed, ignore it
- 		if (c=='\r') c='\n';  // mask diffrence between operating systems
+void COM_rx_char_isr(char c) 
+{
+	if (c!='\0') 
+	{  // ascii based protocol, \0 char is not allowed, ignore it
+ 		if (c=='\r') c='\n';			// mask difference between operating systems
 		rx_buff[rx_buff_in++]=c;
 		rx_buff_in%=RX_BUFF_SIZE;
-		if (rx_buff_in==rx_buff_out) { // buffer overloaded, drop oldest char 
+		if (rx_buff_in==rx_buff_out) 
+		{ // buffer overloaded, drop oldest char 
 			rx_buff_out++;
 			rx_buff_out%=RX_BUFF_SIZE;
 		}
-		if (c=='\n') {
+		if (c=='\n') 
+		{
 			task |= TASK_COM;
 			COM_requests++;
 		}
 	}
 }
 
+
 /*!
  *******************************************************************************
- *  \brief receive bytes
+ *  \brief receive bytes - get from receive buffer
  *
  *  \note
  ******************************************************************************/
-static char COM_getchar(void) {
+static char COM_getchar(void) 
+{
 	char c;
 	cli();
-	if (rx_buff_in!=rx_buff_out) {
+	if (rx_buff_in!=rx_buff_out) 
+	{
 		c=rx_buff[rx_buff_out++];
 		rx_buff_out%=RX_BUFF_SIZE;
     	COM_requests--;
-	} else {
+	} 
+	else 
+	{
     	COM_requests=0;
         c='\0';
     }
@@ -139,14 +163,22 @@ static char COM_getchar(void) {
 	return c;
 }
 
+#endif		/* !COM_RS485 */
+
+
 /*!
  *******************************************************************************
- *  \brief flush output buffer
+ *  \brief flush output buffer - trigger send of message
  *
  *  \note
  ******************************************************************************/
-void COM_flush (void) {
-	if (tx_buff_in!=tx_buff_out) {
+void COM_flush (void) 
+{
+	#if COM_RS485
+	RS_startSend();				// Can just send - we know there's response to send
+	#else
+	if (tx_buff_in!=tx_buff_out) 
+	{
 		#if (defined COM_RS232) || (defined COM_RS485)
 			RS_startSend();
 		#elif THERMOTRONIC	//UART for THERMOTRONIC not implemented
@@ -154,8 +186,17 @@ void COM_flush (void) {
 			#error "need todo"
 		#endif
 	}
+	#endif
 }
 
+
+/**
+ * Print '0' or '1' (representing false, true)
+ */
+static void printBool(uint8_t v)
+{
+	COM_putchar(v ? '1' : '0');
+}
 
 /*!
  *******************************************************************************
@@ -178,7 +219,8 @@ static void print_decXX(uint8_t i) {
  *
  *  \note only unsigned numbers
  ******************************************************************************/
-static void print_decXXXX(uint16_t i) {
+static void print_decXXXX(uint16_t i) 
+{
 	print_decXX(i/100);
 	print_decXX(i%100);
 }
@@ -189,7 +231,8 @@ static void print_decXXXX(uint16_t i) {
  *
  *  \note only unsigned numbers
  ******************************************************************************/
-static void print_hexXX(uint8_t i) {
+static void print_hexXX(uint8_t i) 
+{
 	uint8_t x = i>>4;
 	if (x>=10) {
 		COM_putchar(x+'a'-10);	
@@ -235,7 +278,12 @@ static void print_s_p(const char * s) {
  *  \note
  ******************************************************************************/
 static void print_version(bool sync) {
+#ifdef COM_RS232
 	const char * s = (PSTR(VERSION_STRING "\n"));
+#else
+	const char * s = (PSTR(VERSION_STRING ));
+#endif
+
     COM_putchar('V');
 	char c;
 	for (c = pgm_read_byte(s); c; ++s, c = pgm_read_byte(s)) {
@@ -254,12 +302,15 @@ static void print_version(bool sync) {
  *
  *  \note
  ******************************************************************************/
-void COM_init(void) {
-	print_version(false);
+void COM_init(void) 
+{
 #if (THERMOTRONIC!=1)
-	RS_Init();
-#endif
+	RS_Init();				// Initialise serial
+#ifdef COM_RS232
+	print_version(false);			// No unsolicited output with RS-485
 	COM_flush();
+#endif
+#endif
 }
 
 
@@ -322,8 +373,10 @@ void COM_print_debug(uint8_t type) {
 	if (menu_locked) {
 		print_s_p(PSTR(" L"));
 	}
+#ifdef COM_RS232
 	COM_putchar('\n');
 	COM_flush();
+#endif
 #if (RFM==1)
     bool sync = (type==2);
     if (!sync) {
@@ -351,32 +404,42 @@ void COM_print_debug(uint8_t type) {
     
 }
 
+ 
+#if ENABLE_LOCAL_COMMANDS
+
 /*! 
     \note dirty trick with shared array for \ref COM_hex_parse and \ref COM_commad_parse
-    code size optimalization
+    code size optimisation
 */
 static uint8_t com_hex[3];
- 
 
 /*!
  *******************************************************************************
  *  \brief parse hex number (helper function)
  *
- *	\note hex numbers use ONLY lowcase chars, upcase is reserved for commands
+ *	\note hex numbers use ONLY lower case chars, upper case is reserved for commands
  *	
  ******************************************************************************/
-static char COM_hex_parse (uint8_t n) {
+static char COM_hex_parse (uint8_t n) 
+{
 	uint8_t i;
-	for (i=0;i<n;i++) {
+	for (i=0;i<n;i++) 
+	{
     	uint8_t c = COM_getchar()-'0';
     	if ( c>9 ) {  // chars < '0' overload var c
-			if ((c>=('a'-'0')) && (c<=('f'-'0'))) {
+			if ((c>=('a'-'0')) && (c<=('f'-'0'))) 
+			{
     			c-= (('a'-'0')-10);
-			} else return c+'0';
+			} 
+			else 
+				return c+'0';
 		}
-    	if (i&1) {
+    	if (i&1) 
+		{
     	   com_hex[i>>1]+=c;
-        } else {
+        } 
+		else 
+		{
     	   com_hex[i>>1]=(uint8_t)c<<4;
         }
     }
@@ -392,7 +455,8 @@ static char COM_hex_parse (uint8_t n) {
  *  \brief print X[xx]=
  *
  ******************************************************************************/
-static void print_idx(char t, uint8_t i) {
+static void print_idx(char t, uint8_t i) 
+{
     COM_putchar(t);
     COM_putchar('[');
     print_hexXX(i);
@@ -400,6 +464,7 @@ static void print_idx(char t, uint8_t i) {
     COM_putchar('=');
 }
 
+#endif		/* 		#if ENABLE_LOCAL_COMMANDS  */
 
 
 /*!
@@ -407,23 +472,180 @@ static void print_idx(char t, uint8_t i) {
  *  \brief parse command
  *
  *  \note commands have FIXED format
- *  \note command X.....\n    - X is upcase char as commad name, \n is termination char
- *  \note hex numbers use ONLY lowcase chars, upcase is reserved for commands
- *  \note   V\n - print version information
- *  \note   D\n - print status line 
- *  \note   Taa\n - print watched variable aa (return 2 or 4 hex numbers) see to \ref watch.c
- *  \note   Gaa\n - get configuration byte with hex address aa see to \ref eeprom.h 0xff address returns EEPROM layout version
- *  \note   Saadd\n - set configuration byte aa to value dd (hex)
- *  \note   Rab\n - get timer for day a slot b, return cddd=(timermode c time ddd) (hex)
- *  \note   Wabcddd\n - set timer  for day a slot b timermode c time ddd (hex)
- *  \note   B1324\n - reboot, 1324 is password (fixed at this moment)
- *  \note   Yyymmdd\n - set, year yy, month mm, day dd; HEX values!!!
- *  \note   Hhhmmss\n - set, hour hh, minute mm, second ss; HEX values!!!
- *  \note   Axx\n - set wanted temperature [unit 0.5C]
- *  \note   Mxx\n - set mode and close window (00=manu 01=auto fd=nochange/close window only)
- * 	\note	Lxx\n - Lock keys, and return lock status (00=unlock, 01=lock, 02=status only)
+ *  \note command X.....\n    - X is upper case char as command name, termination char handled by protocol (always \n in RS-232 only mode
+ *  \note hex numbers use ONLY lower case chars, upper case is reserved for commands
+ *  \note   V - print version information
+ *  \note   D - print debug/status line 
+ *  \note   Taa - print watched variable aa (return 2 or 4 hex numbers) see to \ref watch.c
+ *  \note   Gaa - get configuration byte with hex address aa see to \ref eeprom.h 0xff address returns EEPROM layout version
+ *  \note   Saadd - set configuration byte aa to value dd (hex)
+ *  \note   Rab - get timer for day a slot b, return cddd=(timermode c time ddd) (hex)
+ *  \note   Wabcddd - set timer  for day a slot b timermode c time ddd (hex)
+ *  \note   B1324 - reboot, 1324 is password (fixed at this moment)
+ *  \note   Yyymmdd - set, year yy, month mm, day dd; HEX values!!!
+ *  \note   Hhhmmss - set, hour hh, minute mm, second ss; HEX values!!!
+ *  \note   Axx - set wanted temperature [unit 0.5C]
+ *  \note   Mxx - set mode and close window (00=manu 01=auto fd=nochange/close window only) - more options in RS-485
+ * 	\note	Lxx - Lock keys, and return lock status (00=unlock, 01=lock, 02=status only)
+ *	\note	Ctt - set ambient temperature, (re)trigger internal timer [unit 0.5C] (RS-485 only)
+ *	\note	Q   - get current status/mode etc (RS-485 only)
  *	
  ******************************************************************************/
+#if COM_RS485
+/*
+ *		Command parser in RS-485 mode (new)
+ *
+ *		Received message is in rxBuffer
+ *		Received character count is in rxCount
+ *		Message protocol used is in rxProtocol (probably not relevant)
+ *		Unit address is in rxAddress (probably not relevant)
+ *
+ *		COM_getchar still works
+ */
+void COM_commad_parse (void) 
+{
+	char c;
+	char errLet = '\0';			// Used to log if there was a parameter error
+	
+	txPointer = 0;				// Reset Tx buffer pointer		@TODO: Somewhere else?
+	
+	switch(c=COM_getchar()) 
+	{
+		case 'V':
+			if (rxCount == 1) print_version(false);
+			break;
+		#if ENABLE_LOCAL_COMMANDS
+		case 'D':			// Print debug info
+			if (rxCount == 1) COM_print_debug(1);
+			break;
+		case 'T':					// Print watched variable
+			if (COM_hex_parse(1*2)!='\0') { errLet = 'b'; break; }
+			COM_putchar('T');
+			print_idx(c,com_hex[0]);
+			print_hexXXXX(watch(com_hex[0]));
+			break;
+		case 'Q' :
+			if (rxCount != 1) { errLet = 'b'; break; }
+			COM_putchar('Q');
+			printBool(CTL_mode_auto);						// Temperature control mode
+			printBool(config.window_detection_mode);		// Window status control
+			printBool(CTL_mode_window);						// Window open/closed
+			print_hexXX(CTL_temp_wanted);					// Demand temperature
+			printBool(adcRemoteTimer);						// Ambient temperature source flag
+			print_hexXX(temp_average/50);					// Actual ambient temperature - 0.5 degree steps
+			COM_putchar('0' + MOTOR_calibration_step);		// Calibration status
+			print_hexXX(valve_wanted);						// Valve position (strictly, demand position, I think)
+			printBool(valve_wanted > config.valve_min);		// Require heat if valve open beyond configured 'minimum' position
+			break;
+		case 'G':
+		case 'S':
+			if (c=='G') 
+			{
+				if (COM_hex_parse(1*2)!='\0') { errLet = 'b'; break; }
+			} 
+			else 
+			{
+				if (COM_hex_parse(2*2)!='\0') { errLet = 'b'; break; }
+				if (com_hex[0]<CONFIG_RAW_SIZE) 
+				{
+					config_raw[com_hex[0]]=(uint8_t)(com_hex[1]);
+					eeprom_config_save(com_hex[0]);
+				}
+			}
+			COM_putchar(c);
+			print_idx(c,com_hex[0]);
+			if (com_hex[0]==0xff) 
+			{
+				print_hexXX(EE_LAYOUT);
+			} 
+			else 
+			{
+				print_hexXX(config_raw[com_hex[0]]);
+			}
+			break;
+		case 'C' :						// Set ambient temperature
+			if (COM_hex_parse(1*2)!='\0') { errLet = 'b'; break; }
+			adcRemoteTimer = ADC_REMOTE_TEMP_TIMEOUT;
+			adcRemoteTemp = com_hex[0] * 50;			// Change to 1/100 degree resolution
+			COM_putchar('C');
+			break;
+		case 'R':
+		case 'W':
+			if (c=='R') 
+			{
+				if (COM_hex_parse(1*2)!='\0') { errLet = 'b'; break; }
+			} 
+			else 
+			{
+				if (COM_hex_parse(3*2)!='\0') { errLet = 'b'; break; }
+  				RTC_DowTimerSet(
+                    com_hex[0]>>4, 
+                    com_hex[0]&0xf, 
+                    (((uint16_t) (com_hex[1])&0xf)<<8)+(uint16_t)(com_hex[2]), 
+                    (com_hex[1])>>4);
+				CTL_update_temp_auto();
+			}
+			COM_putchar(c);
+            print_idx(c,com_hex[0]);
+			print_hexXXXX(eeprom_timers_read_raw(
+                timers_get_raw_index((com_hex[0]>>4),(com_hex[0]&0xf))));
+			break;
+		case 'Y':
+			if (COM_hex_parse(3*2)!='\0') { errLet = 'b'; break; }
+			RTC_SetDate(com_hex[2],com_hex[1],com_hex[0]);
+			COM_putchar('Y');
+			break;
+		case 'H':
+			if (COM_hex_parse(3*2)!='\0') { errLet = 'b'; break; }
+			RTC_SetHour(com_hex[0]);
+			RTC_SetMinute(com_hex[1]);
+			RTC_SetSecond(com_hex[2]);
+			COM_putchar('H');
+			break;
+		case 'B':
+			if (COM_hex_parse(2*2)!='\0') { errLet = 'b'; break; }
+  			if ((com_hex[0]==0x13) && (com_hex[1]==0x24)) 
+				{
+                    cli();
+                    wdt_enable(WDTO_15MS);		//wd on,15ms
+                    while(1);					//loop till reset
+	    		}
+			break;
+        case 'M':			// Set mode; open/close window
+            if (COM_hex_parse(1*2)!='\0') { errLet = 'b'; break; }
+            CTL_change_mode(com_hex[0]);
+			COM_putchar('M');
+            break;
+        case 'A':
+            if (COM_hex_parse(1*2)!='\0') { errLet = 'b'; break; }
+            if (com_hex[0]<TEMP_MIN-1) { errLet = 'b'; break; }
+            if (com_hex[0]>TEMP_MAX+1) { errLet = 'b'; break; }
+            CTL_set_temp(com_hex[0]);
+			COM_putchar('A');
+            break;
+        case 'L':
+            if (COM_hex_parse(1*2)!='\0') { errLet = 'b'; break; }
+            if (com_hex[0]<=1) menu_locked=com_hex[0];
+			COM_putchar('L');
+            print_hexXX(menu_locked);
+            break;
+#endif
+		default:
+			errLet = 'a';				// 'Invalid command' response
+			break;
+	}
+	if (errLet != '\0') COM_putchar(errLet);
+	//if (c!='\0') COM_putchar('\n');			Terminator added in protocol handler if required
+	//resetRx();								// This will acknowledge that received message processed
+	COM_flush();
+}
+#endif			/* COM_RS485 */
+
+
+#if COM_RS232
+/*
+ *		Command parser in RS-232 mode (no change, to try and avoid breaking anything!)
+ */
 void COM_commad_parse (void) {
 	char c;
 	while (COM_requests) {
@@ -534,6 +756,8 @@ void COM_commad_parse (void) {
 		#endif
 	}
 }
+#endif		/* COM_RS232 */
+
 
 #if RFM==1
 static void COM_wireless_word(uint16_t w) {

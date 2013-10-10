@@ -1,7 +1,7 @@
 /*
  *  Open HR20
  *
- *  target:     ATmega169 @ 4 MHz in Honnywell Rondostat HR20E
+ *  target:     ATmega169 @ 4 MHz in Honeywell Rondostat HR20E
  *
  *  compiler:    WinAVR-20071221
  *              avr-libc 1.6.0
@@ -44,6 +44,9 @@
 	#endif
 	void RS_startSend(void);
 	void RS_Init(void);
+	extern volatile unsigned char serialState;
+
 #else 
 	#define RS_need_clock() (0)
+	#define serialState (0)
 #endif

@@ -1,7 +1,7 @@
 /*
  *  Open HR20
  *
- *  target:     ATmega169 @ 4 MHz in Honnywell Rondostat HR20E
+ *  target:     ATmega169 @ 4 MHz in Honeywell Rondostat HR20E
  *
  *  compiler:   WinAVR-20071221
  *              avr-libc 1.6.0
@@ -45,11 +45,11 @@
 #include "keyboard.h"
 
 // global Vars for default values: temperatures and speed
-uint8_t CTL_temp_wanted=0;   // actual desired temperature
-uint8_t CTL_temp_wanted_last=0xff;   // desired temperature value used for last PID control
-uint8_t CTL_temp_auto=0;   // actual desired temperature by timer
-bool CTL_mode_auto=true;   // actual desired temperature by timer
-uint8_t CTL_mode_window = 0; // open window (0=closed, >0 open-timmer)
+uint8_t CTL_temp_wanted=0;				// actual desired temperature
+uint8_t CTL_temp_wanted_last=0xff;		// desired temperature value used for last PID control
+uint8_t CTL_temp_auto=0;				// demand temperature when in auto mode
+bool CTL_mode_auto=true;				// operating mode
+uint8_t CTL_mode_window = 0;			// open window (0=closed, >0 open-timer)
 #if (HW_WINDOW_DETECTION)
 	static uint8_t window_timer=AVERAGE_LEN+1;
 #else
@@ -58,10 +58,10 @@ uint8_t CTL_mode_window = 0; // open window (0=closed, >0 open-timmer)
 int8_t CTL_interatorCredit;
 uint8_t CTL_creditExpiration;
 #if BOOST_CONTROLER_AFTER_CHANGE
-	uint8_t PID_boost_timeout=0;  //boost timout in minutes
+	uint8_t PID_boost_timeout=0;  //boost timeout in minutes
 #endif
-static uint16_t PID_update_timeout=AVERAGE_LEN+1;   // timer to next PID controler action/first is 16 sec after statup
-int8_t PID_force_update=AVERAGE_LEN+1;      // signed value, val<0 means disable force updates \todo rename
+static uint16_t PID_update_timeout=AVERAGE_LEN+1;		// timer to next PID controller action/first is 16 sec after startup
+int8_t PID_force_update=AVERAGE_LEN+1;					// signed value, val<0 means disable force updates \todo rename
 uint8_t valveHistory[VALVE_HISTORY_LEN];
 
 static uint8_t pid_Controller(int16_t setPoint, int16_t processValue, uint8_t old_result, bool updateNow);
@@ -89,29 +89,44 @@ static void CTL_window_detection(void) {
 	window_timer=(w)?(config.window_close_detection_delay):(config.window_open_detection_delay);
 }
 #else
-static void CTL_window_detection(void) {
+/*
+ *	Work out whether window is open from temperature changes
+ */
+static void CTL_window_detection(void) 
+{
+	if (config.window_detection_mode)
+	{	// Window open/closed set via serial here
+		return;
+	}		
     uint8_t i = (ring_buf_temp_avgs_pos+AVGS_BUFFER_LEN
-        -((CTL_mode_window!=0)?config.window_close_detection_time:config.window_open_detection_time)
+        -((CTL_mode_window!=0) ? config.window_close_detection_time : config.window_open_detection_time)
         )%AVGS_BUFFER_LEN;
     int16_t min = 10000;
     int16_t max = 0;
-    while (1) {
+    while (1) 
+	{
         int16_t x = ring_buf_temp_avgs[i];
-        if (x!=0) { // startup condition
+        if (x!=0) 
+		{ // startup condition
             if (x<min) min = x;
             if (x>max) max = x;
         }
         if (i==ring_buf_temp_avgs_pos) break;
         i=(i+1)%AVGS_BUFFER_LEN;
     }
-    if ((temp_average-min) > (int16_t) config.window_close_detection_diff) {
-        if (CTL_mode_window!=0) {
+    if ((temp_average-min) > (int16_t) config.window_close_detection_diff) 
+	{
+        if (CTL_mode_window!=0) 
+		{
             CTL_mode_window=0;
             PID_force_update = 0;
 			//kb_events |= KB_EVENT_UPDATE_LCD;
         }
-    } else {
-        if ((CTL_mode_window==0) && ((max-temp_average) > (int16_t) config.window_open_detection_diff)) {
+    } 
+	else 
+	{
+        if ((CTL_mode_window==0) && ((max-temp_average) > (int16_t) config.window_open_detection_diff)) 
+		{
             CTL_mode_window=config.window_open_timeout;
             PID_force_update = 0;
 			//kb_events |= KB_EVENT_UPDATE_LCD;
@@ -128,87 +143,122 @@ static void CTL_window_detection(void) {
  *  \returns valve position
  *
  ******************************************************************************/
-void CTL_update(bool minute_ch) {
+void CTL_update(bool minute_ch) 
+{
 #if (HW_WINDOW_DETECTION)
 	PORTE |= _BV(PE2); // enable pull-up
 #endif
 
-    if ( minute_ch || (CTL_temp_auto==0) ) {
+    if ( minute_ch || (CTL_temp_auto==0) ) 
+	{
         // minutes changed or we need return to timers
         uint8_t t=RTC_ActualTimerTemperature(!(CTL_temp_auto==0));
-        if (t!=0) {
+        if (t!=0) 
+		{
             CTL_temp_auto=t;
-            if (CTL_mode_auto) {
+            if (CTL_mode_auto) 
+			{
                 CTL_temp_wanted=CTL_temp_auto;
-                if ((PID_force_update<0)&&(CTL_temp_wanted!=CTL_temp_wanted_last)) {
+                if ((PID_force_update<0)&&(CTL_temp_wanted!=CTL_temp_wanted_last)) 
+				{
                     PID_force_update=0;
                 }
             }
         }
     }
+
 	#if BOOST_CONTROLER_AFTER_CHANGE
-		if ( minute_ch && (PID_boost_timeout>0)) {
-		PID_boost_timeout--;
-		  if (PID_boost_timeout==0) {
-		  PID_force_update = 0;
-		  }
+		if ( minute_ch && (PID_boost_timeout>0)) 
+		{
+			PID_boost_timeout--;
+			if (PID_boost_timeout==0) 
+			{
+				PID_force_update = 0;
+			}
 		}
 	#endif
 
-    CTL_window_detection();
+    CTL_window_detection();				// Update 'window open' status
     if (PID_update_timeout>0) PID_update_timeout--;
-    if (PID_force_update>0) { 
+    if (PID_force_update>0) 
+	{ 
 		PID_force_update--;
-	} else if ((PID_update_timeout == 0)||(PID_force_update==0)) {
+	} 
+	else if ((PID_update_timeout == 0)||(PID_force_update==0)) 
+	{
         uint8_t temp;
-        if ((CTL_temp_wanted<TEMP_MIN) || mode_window()) {
-            temp = TEMP_MIN;  // frost protection to TEMP_MIN
-        } else {
+        if ((CTL_temp_wanted<TEMP_MIN) || mode_window())		// mode_window() evaluates to CTL_mode_window!=0
+		{
+            temp = TEMP_MIN;		// frost protection to TEMP_MIN if window open, or demand temp below frost protection level
+        } 
+		else 
+		{
             temp = CTL_temp_wanted;
         }
         bool updateNow=(temp!=CTL_temp_wanted_last);
-		  if (updateNow||(PID_update_timeout == 0)) {
-            PID_update_timeout = (config.PID_interval * 5); // new PID pooling
+		if (updateNow||(PID_update_timeout == 0)) 
+		{
+            PID_update_timeout = (config.PID_interval * 5);			// new PID pooling
 			uint8_t new_valve;
-            if (temp>TEMP_MAX) {
-                new_valve = config.valve_max;
-            } else {
-                new_valve = pid_Controller(calc_temp(temp),temp_average,valveHistory[0],updateNow);
+            if (temp>TEMP_MAX) 
+			{
+                new_valve = config.valve_max;				// Is this right? Demand temp above permissible range, so open valve fully?
+            } 
+			else 
+			{
+                new_valve = pid_Controller(calc_temp(temp), temp_average, valveHistory[0], updateNow);
             }
 			CTL_temp_wanted_last=temp;
 			{	
 				int8_t i;
 				#if BLOCK_INTEGRATOR_AFTER_VALVE_CHANGE
-					if (valveHistory[0]!=new_valve) {  
+					if (valveHistory[0]!=new_valve) 
+					{  
 						CTL_integratorBlock=DEFINE_INTEGRATOR_BLOCK;       //block Integrator if valve moves
 					}
 				#endif
 
-				for(i=VALVE_HISTORY_LEN-1; i>0; i--) {
-					if (updateNow || (new_valve <= config.valve_max) || (new_valve >= config.valve_min)) {
+				for(i=VALVE_HISTORY_LEN-1; i>0; i--) 
+				{
+					if (updateNow || (new_valve <= config.valve_max) || (new_valve >= config.valve_min)) 
+					{
 						// condition inside loop is stupid, but produce shorter code
 						valveHistory[i]=new_valve;
-					} else  {
+					} 
+					else
+					{
 						valveHistory[i]=valveHistory[i-1];
 					}
 				}
 				valveHistory[0]=new_valve;
 			}
         }
-        COM_print_debug(0);
-        PID_force_update = -1; // invalid value = not used
+		#ifdef COM_RS232
+		if (minute_ch)
+		{
+			COM_print_debug(0);			// No unsolicited output with RS-485			
+		}
+		#endif
+        PID_force_update = -1;			// invalid value = not used
     }
     // batt error detection
-    if (bat_average) {
-		if (bat_average < 20*(uint16_t)config.bat_low_thld) {
+    if (bat_average) 
+	{
+		if (bat_average < 20*(uint16_t)config.bat_low_thld) 
+		{
     	    CTL_error |=  CTL_ERR_BATT_LOW | CTL_ERR_BATT_WARNING;
-	    } else {
-	        if (bat_average < 20*(uint16_t)config.bat_warning_thld) {
+	    } 
+		else 
+		{
+	        if (bat_average < 20*(uint16_t)config.bat_warning_thld) 
+			{
 	            CTL_error |=  CTL_ERR_BATT_WARNING;
 				#if (BATT_ERROR_REVERSIBLE)
 	            	CTL_error &= ~CTL_ERR_BATT_LOW;
 				#endif
-	        } else {
+	        } 
+			else 
+			{
 				#if (BATT_ERROR_REVERSIBLE)
 	            	CTL_error &= ~(CTL_ERR_BATT_WARNING|CTL_ERR_BATT_LOW);
 				#endif
@@ -223,11 +273,15 @@ void CTL_update(bool minute_ch) {
  *
  *  \param ch relative change
  ******************************************************************************/
-void CTL_temp_change_inc (int8_t ch) {
+void CTL_temp_change_inc (int8_t ch) 
+{
     CTL_temp_wanted+=ch;
-	if (CTL_temp_wanted<TEMP_MIN-1) {
+	if (CTL_temp_wanted<TEMP_MIN-1) 
+	{
 		CTL_temp_wanted= TEMP_MIN-1;
-	} else if (CTL_temp_wanted>TEMP_MAX+1) {
+	} 
+	else if (CTL_temp_wanted>TEMP_MAX+1) 
+	{
 		CTL_temp_wanted= TEMP_MAX+1;
 	}
 	CTL_mode_window = 0;
@@ -239,31 +293,71 @@ static uint8_t menu_temp_rewoke;
  *******************************************************************************
  *  Change controller mode
  *
+ *	Parameter determines action:
+ *		00 - manual (temperature control)
+ *		01 - auto (temperature control)
+ *		f0 – window mode auto
+ *		f1 – window mode remote controlled
+ *		fc – window open (auto mode only)
+ *		fd (CTL_CLOSE_WINDOW_FORCE) – signal that window closed (any mode)
+ *		f3 (CTL_CHANGE_MODE_REWOKE) – 
+ *		ff (CTL_CHANGE_MODE) - 
  ******************************************************************************/
-void CTL_change_mode(int8_t m) {
-    if (m == CTL_CHANGE_MODE) {
-        // change
-  		menu_temp_rewoke=CTL_temp_auto;
-		#if BOOST_CONTROLER_AFTER_CHANGE
-			PID_boost_timeout = 0; //jr disable boost
-		#endif
-        CTL_mode_auto=!CTL_mode_auto;
-        PID_force_update = 9;
-    } else if (m == CTL_CHANGE_MODE_REWOKE) {
-        //rewoke
-  		CTL_temp_auto=menu_temp_rewoke;
-        CTL_mode_auto=!CTL_mode_auto;
-        PID_force_update = 9;
-    } else {
-        if (m >= 0) CTL_mode_auto=m;
-        PID_force_update = 0;
-    }
-    if (CTL_mode_auto && (m != CTL_CHANGE_MODE_REWOKE)) {
+void CTL_change_mode(int8_t m) 
+{
+	uint8_t autoProc = 0;
+	switch (m)
+	{
+		case CTL_CHANGE_MODE :
+			// change
+			menu_temp_rewoke=CTL_temp_auto;
+			#if BOOST_CONTROLER_AFTER_CHANGE
+			PID_boost_timeout = 0;				//jr disable boost
+			#endif
+			CTL_mode_auto= ! CTL_mode_auto;		// Toggle mode
+			PID_force_update = 9;
+		    CTL_mode_window = 0;
+			autoProc = 1;
+			break;
+		case CTL_CHANGE_MODE_REWOKE :
+			//rewoke
+			CTL_temp_auto=menu_temp_rewoke;
+			CTL_mode_auto=!CTL_mode_auto;
+			PID_force_update = 9;
+		    CTL_mode_window = 0;
+			break;
+		case 0 :
+		case 1 :
+			CTL_mode_auto = m;				// Set auto/manual control mode
+			PID_force_update = 0;
+			autoProc = 1;
+			break;
+		case 0x7f :
+			MOTOR_updateCalibration(0);		// Trigger calibration
+			break;
+		case -16 :							// Window mode local control
+		case -15 :							// Window mode remote control
+			config.window_detection_mode = m & 1;
+			eeprom_config_save((uint16_t)&(config.window_detection_mode));			// Save mode for posterity
+			break;
+		case -4 :							// Window open
+			if (config.window_detection_mode) CTL_mode_window = 1;
+			break;
+		case CTL_CLOSE_WINDOW_FORCE :
+		    CTL_mode_window = 0;			// Just close window
+			break;
+	}
+    if (autoProc) 
+	{
     	CTL_temp_wanted=(CTL_temp_auto=RTC_ActualTimerTemperature(false));
     	// CTL_temp_auto=0;  //refresh wanted temperature in next step
     }
-    CTL_mode_window = 0;
 }
+
+
+/************************************************************************/
+/*            PID CONTROLLER AND VARIABLES                             */
+/************************************************************************/
 
 //! Summation of errors, used for integrate calculations
 int32_t sumError=0;
@@ -290,9 +384,11 @@ static int16_t lastProcessValue=0;
 static uint16_t lastTempChangeErrorAbs;
 static int32_t lastTempChangeSumError;
 
-static void testIntegratorRevert(uint16_t absErr) {
-	 if ((absErr>=((lastTempChangeErrorAbs*3)>>2)) 
-		&& (absErr > (I_ERR_TOLLERANCE_AROUND_0*2))) {
+static void testIntegratorRevert(uint16_t absErr) 
+{
+	if ((absErr>=((lastTempChangeErrorAbs*3)>>2)) 
+		&& (absErr > (I_ERR_TOLLERANCE_AROUND_0*2))) 
+	{
 		// if error could not be reduced to 3/4 and Error is larger than I_ERR_TOLLERANCE_AROUND_0°C
 		sumError=lastTempChangeSumError;
 	}
@@ -300,22 +396,36 @@ static void testIntegratorRevert(uint16_t absErr) {
 }
 
 
+/*
+ *	Actual PID control loop calculation
+ *
+ *	setPoint - demand temperature in 0.01 degree  increments
+ *	processValue - actual temperature in 0.01 degree  increments
+ *	old_result - calculated valve position after previous sample
+ *	updateNow - ????
+ *
+ *	Return: new valve position
+ */
 static uint8_t pid_Controller(int16_t setPoint, int16_t processValue, uint8_t old_result, bool updateNow)
 {
-  int32_t /*error2,*/ pi_term;
-  int16_t error16;
-  error16 = setPoint - processValue;
+	int32_t /*error2,*/ pi_term;
+	int16_t error16;
+	error16 = setPoint - processValue;
 
-  // maximum error is 12 degree C
-  if (error16 > 1200) {
-    error16=1200;
-  } else if (error16 < -1200) {
-    error16=-1200;
-  }
+	// maximum error is 12 degree C
+	if (error16 > 1200) 
+	{
+		error16=1200;
+	} 
+	else if (error16 < -1200) 
+	{
+		error16=-1200;
+	}
 
   {
 	  int16_t absErr = abs(error16);
-	  if (updateNow) {
+	  if (updateNow) 
+	  {
 		  CTL_interatorCredit=config.I_max_credit;
 		  CTL_creditExpiration=config.I_credit_expiration;
 		  CTL_integratorBlock=DEFINE_INTEGRATOR_BLOCK; // do not allow update integrator immediately after temp change
@@ -324,39 +434,52 @@ static uint8_t pid_Controller(int16_t setPoint, int16_t processValue, uint8_t ol
 		  lastTempChangeSumError = sumError;
 		  #if BOOST_CONTROLER_AFTER_CHANGE
 			  if ((abs(setPoint-CTL_temp_wanted_last)>=config.temp_boost_setpoint_diff) // change of wanted temp large enough to start boost (0,5°C)
-				&& (absErr>=(int16_t)config.temp_boost_error)) {  // error large enough to start boost (0,3°C)
+				&& (absErr>=(int16_t)config.temp_boost_error))	  // error large enough to start boost (0,3°C)
+			  {
 				PID_boost_timeout = (error16 >= 0) ? config.temp_boost_time_heat : config.temp_boost_time_cool ;
 				PID_boost_timeout = (uint8_t)(MIN(255,abs(error16)/10*(int16_t)PID_boost_timeout/(int16_t)config.temp_boost_tempchange)); //boosttime=error/10(0,1°C)*time/tempchange
 			  }
 		  #endif
-	  } else {
-		if (CTL_integratorBlock == 0) {
-			if (CTL_creditExpiration>0) {
+	  } 
+	  else 
+	  {
+		if (CTL_integratorBlock == 0) 
+		{
+			if (CTL_creditExpiration>0) 
+			{
 				CTL_creditExpiration--;
-			} else {
+			} 
+			else 
+			{
 				CTL_interatorCredit=0;
 			}
-			if ((error16 >= 0) ? (old_result < config.valve_max) : (old_result > config.valve_min)) {
+			if ((error16 >= 0) ? (old_result < config.valve_max) : (old_result > config.valve_min)) 
+			{
 			  if (((lastErrorSign != ((uint8_t)(error16>>8)&0x80))) || 
-				((absErr==last2AbsError) && (absErr<=I_ERR_TOLLERANCE_AROUND_0))) { //sign of last error16 != sign of current OR abserror around 0
-
+				((absErr==last2AbsError) && (absErr<=I_ERR_TOLLERANCE_AROUND_0))) 
+			  { //sign of last error16 != sign of current OR abserror around 0
 				  CTL_interatorCredit=config.I_max_credit; // ? optional
 				  CTL_creditExpiration=config.I_credit_expiration;
 				  goto INTEGRATOR; // next integration, do not change CTL_interatorCredit
 			  }
-			  if (CTL_interatorCredit>0) {
-				  if (absErr >= last2AbsError) { // error can grow only limited time 
+			  if (CTL_interatorCredit>0) 
+			  {
+				  if (absErr >= last2AbsError) 
+				  { // error can grow only limited time 
 					  CTL_interatorCredit-=(absErr/I_ERR_WEIGHT)+1; // max is 1200/20+1 = 61
 					  INTEGRATOR:
 					  sumError += error16*8;
 				  }
 			  }
 			} 
-			if (CTL_interatorCredit<=0) {
+			if (CTL_interatorCredit<=0) 
+			{
 				// credit is empty, test result
 				testIntegratorRevert(absErr);
 			} 
-		} else {
+		} 
+		else 
+		{
 			CTL_integratorBlock--;
 		}
 		last2AbsError = lastAbsError;
@@ -381,13 +504,17 @@ static uint8_t pid_Controller(int16_t setPoint, int16_t processValue, uint8_t ol
 	}
   #endif
   
-  if (config.I_Factor > 0) {
+  if (config.I_Factor > 0) 
+  {
 	  int32_t maxSumError;
       // for overload protection: maximum is scalling_factor*scalling_factor*50/1 = 3276800
       maxSumError = ((int32_t)scalling_factor*(int32_t)scalling_factor*50)/config.I_Factor;
-	  if(sumError > maxSumError){
+	  if(sumError > maxSumError)
+	  {
 		sumError = maxSumError;
-	  } else if(sumError < -maxSumError){
+	  } 
+	  else if(sumError < -maxSumError)
+	  {
 		sumError = -maxSumError;
 	  }
   }
@@ -406,9 +533,11 @@ static uint8_t pid_Controller(int16_t setPoint, int16_t processValue, uint8_t ol
   pi_term += (int32_t)(config.valve_center)*scalling_factor*scalling_factor;
   pi_term >>= 8; // /=scalling_factor
 
-  if(pi_term > (int32_t)((uint16_t)config.valve_max*scalling_factor)){
+  if(pi_term > (int32_t)((uint16_t)config.valve_max*scalling_factor))
+  {
     return config.valve_max;
-  } else if(pi_term < 0){
+  } 
+  else if(pi_term < 0){
     return config.valve_min;
   }
   // now we can use 16bit value ( 0 < pi_term < 25600 )
@@ -419,14 +548,18 @@ static uint8_t pid_Controller(int16_t setPoint, int16_t processValue, uint8_t ol
 		bool gt = (uint8_t)(pi_term16>>8 /*/scalling_factor*/) >= old_result;
 		// asymetric round, ignore changes < 3/4%
 		pi_term16 += scalling_factor/2; // prepare for round
-		if (gt) {
+		if (gt) 
+		{
 			pi_term16 -= config.valve_hysteresis; // prepare for round
-		} else {
+		} 
+		else 
+		{
 			pi_term16 += config.valve_hysteresis; // prepare for round
 		}
 		pi_term16 >>= 8; // /= scalling_factor;
 	}
-	if(pi_term16 < config.valve_min) {
+	if(pi_term16 < config.valve_min) 
+	{
       return config.valve_min;
     }
     

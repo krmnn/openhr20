@@ -40,14 +40,6 @@
 #define __EEPROM_C__
 #include "eeprom.h"
 
-#if !defined(EEWE) && defined(EEPE)
-# define EEWE EEPE
-#endif
-
-#if !defined(EEMWE) && defined(EEMPE)
-# define EEMWE EEMPE
-#endif
-
 
 
 // test for compilation
@@ -82,9 +74,10 @@ uint8_t EEPROM_read(uint16_t address) {
 /*!
  *******************************************************************************
  *  config_read
- *	it is similar as EEPROM_read, but optimized for special usage
+ *	it is similar to EEPROM_read, but optimized for special usage
  ******************************************************************************/
-uint8_t config_read(uint8_t cfg_address, uint8_t cfg_type) {
+uint8_t config_read(uint8_t cfg_address, uint8_t cfg_type) 
+{
 	/* Wait for completion of previous write */
 	while(EECR & (1<<EEWE))
 		;
@@ -99,12 +92,21 @@ uint8_t config_read(uint8_t cfg_address, uint8_t cfg_type) {
  *
  *  \note private function
  *  \note write to ee_config is limited 
+ *
+ * Write current value for configuration data. Always writes to the first byte of a 4-byte block
+ * Other bytes in the block are default value and limits - so potential to adjust them
  ******************************************************************************/
-#define config_write(cfg_address,data) (EEPROM_write((((uint16_t) cfg_address) << 2) + CONFIG_VALUE + (uint16_t)(&ee_config),data))
+#define config_write(cfg_address, data) (EEPROM_write((((uint16_t) cfg_address) << 2) + CONFIG_VALUE + (uint16_t)(&ee_config),data))
 
-void EEPROM_write(uint16_t address, uint8_t data) {
-  /* Wait for completion of previous write */
-  while(EECR & (1<<EEWE))
+static void EEPROM_write(uint16_t address, uint8_t data) 
+{
+	if ((address >= (uint16_t)&ee_config) && (address & 3)) 
+	{
+		// write to eeconfig area is allowed only to column 0 / aligned to 4
+		return; // write protection for configuration default/min/max data
+	}
+
+	  while(EECR & (1<<EEWE))	/* Wait for completion of previous write */
 		;
 	EEAR = address;
 	EEDR = data;
@@ -120,24 +122,27 @@ void EEPROM_write(uint16_t address, uint8_t data) {
  *******************************************************************************
  *  Init configuration storage
  *
+ *  If restore_default is TRUE, all EEPROM values are written to their defaults regardless.
+ *	Otherwise, only those values which are outside limits are rewritten.
  *  \note
  ******************************************************************************/
 
-void eeprom_config_init(bool restore_default) {
-	
+void eeprom_config_init(bool restore_default) 
+{
 	uint16_t i;
 	uint8_t *config_ptr = config_raw;
-#if (NANODE == 1)
-        // set to allow erase and write in one operation
-        EECR |= (EEPM1 | EEPM0);
-#endif
-	for (i=0;i<CONFIG_RAW_SIZE;i++) {
-	    if (restore_default) {
+	for (i=0;i<CONFIG_RAW_SIZE;i++) 
+	{
+	    if (restore_default) 
+		{
    		   *config_ptr = config_default(i); // default value
-   	    } else {
+   	    } 
+		else 
+		{
    		   *config_ptr =  config_value(i);
     		if ((*config_ptr < config_min(i)) //min
-    		 || (*config_ptr > config_max(i))) { //max
+    		 || (*config_ptr > config_max(i))) //max
+			{
     			*config_ptr = config_default(i); // default value
     		}
         }
@@ -149,16 +154,21 @@ void eeprom_config_init(bool restore_default) {
 
 /*!
  *******************************************************************************
- *  Update configuration storage
+ *  Update configuration data as stored in EEPROM
  *
  *  \note
+ *	@param uint8_t integer - address (offset) within first 256 bytes of EEPROM
  ******************************************************************************/
-void eeprom_config_save(uint8_t idx) {
-	if (idx<CONFIG_RAW_SIZE) {
-		if (config_raw[idx] != config_value(idx)) {
+void eeprom_config_save(uint8_t idx) 
+{
+	if (idx<CONFIG_RAW_SIZE) 
+	{
+		if (config_raw[idx] != config_value(idx)) 
+		{	// Data in EEPROM different here
 			if ((config_raw[idx] < config_min(idx)) //min
-		 	|| (config_raw[idx] > config_max(idx))) { //max
-				config_raw[idx] = config_default(idx); // default value
+			 	|| (config_raw[idx] > config_max(idx))) 
+			 { //max
+				config_raw[idx] = config_default(idx);	// default value - set if value to be written is out of range
 			}
 			config_write(idx, config_raw[idx]);
 		}

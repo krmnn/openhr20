@@ -38,8 +38,8 @@
 *****************************************************************************/
 
 
-#define MOTOR_eye_enable() PORTE |= _BV(PE3); // activate photo eye
-#define MOTOR_eye_disable() PORTE &= ~_BV(PE3); // deactivate photo eye
+#define MOTOR_eye_enable() PORTE |= _BV(PE3);    // activate photo eye
+#define MOTOR_eye_disable() PORTE &= ~_BV(PE3);  // deactivate photo eye
 #define MOTOR_eye_test() (PORTE & _BV(PE3))
 
 // How is the H-Bridge connected to the AVR?

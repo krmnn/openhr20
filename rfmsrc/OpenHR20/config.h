@@ -49,6 +49,12 @@ In this file we define only configuration parameters, for example what kind of c
 #include <avr/sleep.h>
 #include <avr/version.h>
 
+#define	DEBUG_ENABLE	1		/* Set to 0 to minimise power consuption */
+
+#define RFM  0			/* No radio module */
+#define TEMP_COMPENSATE_OPTION 0
+#define BOOST_CONTROLER_AFTER_CHANGE 0
+#define ENABLE_LOCAL_COMMANDS 1
 
 #define LANG_uni 1
 #define LANG_de 2
@@ -70,19 +76,22 @@ In this file we define only configuration parameters, for example what kind of c
 
 
 #ifndef REVISION
- #define REVISION "$Rev$"
+ #define REVISION "$Rev: 359 $"
 #endif
 
 // Parameters for the COMM-Port
 #define COM_BAUD_RATE 9600
-#if THERMOTRONIC!=1 //No serialport implementet yet
+#define COM_FAST_BAUD_CLOCK 1			/* Undefine to use the 'original' 8X UART clock */
+#define COM_RECEIVE_ACTIVE	1			/* Undefine so USART enabled on edge detection on RxD */
+#if THERMOTRONIC!=1 //No serial port implemented on Thermotronic yet
 // Note we should only enable of of the following at one time
 /* we support RS232 */
-#define COM_RS232 1
+//#define COM_RS232 1
 /* we support RS485 */
-/* #define COM_RS485  */
-/* Our default Adress, if not set or invalid */
-/* #define COM_DEF_ADR 1 */
+#define COM_RS485 1
+/* Our default Address, if not set or invalid */
+#define COM_DEF_ADR 1
+//#define COM_RECEIVE_ALWAYS	1			/* Set if receive task to be pretty permanently enabled (may not be fully implemented) */
 #endif
 
 #define DEFAULT_TEMPERATURE 2000
@@ -92,6 +101,12 @@ In this file we define only configuration parameters, for example what kind of c
 #endif
 #ifndef TEMP_COMPENSATE_OPTION
 	#define TEMP_COMPENSATE_OPTION 0
+#endif
+
+#ifdef COM_RS485
+#if (HW_WINDOW_DETECTION)
+#error "Cannot have H/W window detection and RS-485 together"
+#endif
 #endif
 
 #if THERMOTRONIC
@@ -109,23 +124,20 @@ In this file we define only configuration parameters, for example what kind of c
 #endif
 
 #if (RFM == 1)
+	#ifdef COM_RS485
+	#error "Cannot have RFM12 and RS-485 together"
+	#endif
 	#ifndef RFM_WIRE_MARIOJTAG 
 		#define RFM_WIRE_MARIOJTAG 0 //!< define that if you want to wire your RFM to external JTAG pins
 	#endif
-	#ifndef RFM_WIRE_TK_INTERNAL 
-		#define RFM_WIRE_TK_INTERNAL 0 //!< define if you want to wire RFM to free internal HR25 pins
-	#endif
-	
-    #if RFM_WIRE_MARIOJTAG || RFM_WIRE_TK_INTERNAL
+    #if RFM_WIRE_MARIOJTAG
 		#define RFM_WIRE_JD_INTERNAL 0 //!< define that if you want to wire your RFM to free internal pins
 	#else 
 		#define RFM_WIRE_JD_INTERNAL 1 //!< define that if you want to wire your RFM to free internal pins
 	#endif
 
 	#define RFM12 1 // just a synonym
-    #ifndef RFM_DEVICE_ADDRESS
-	  #define RFM_DEVICE_ADDRESS 0x00
-    #endif
+	#define RFM_DEVICE_ADDRESS 0x00
 
 	#if (RFM_WIRE_MARIOJTAG == 1)
 		#define DISABLE_JTAG 1 //!< define DISABLE_JTAG if your RFM's connection uses any JTAG pins
@@ -133,39 +145,18 @@ In this file we define only configuration parameters, for example what kind of c
 			#error HW_WINDOW_DETECTION is not compatible with RFM_WIRE_MARIOJTAG
 		#endif
 	#endif
-	#if (RFM_WIRE_TK_INTERNAL == 1)
-		#define DISABLE_JTAG 1 //!< define DISABLE_JTAG if your RFM's connection uses any JTAG pins
-	#endif
-
-    #ifndef SECURITY_KEY_0
 	#define SECURITY_KEY_0		0x01
-    #endif
-    #ifndef SECURITY_KEY_1
 	#define SECURITY_KEY_1		0x23
-    #endif
-    #ifndef SECURITY_KEY_2
 	#define SECURITY_KEY_2		0x45
-    #endif
-    #ifndef SECURITY_KEY_3
 	#define SECURITY_KEY_3		0x67
-    #endif
-    #ifndef SECURITY_KEY_4
 	#define SECURITY_KEY_4		0x89
-    #endif
-    #ifndef SECURITY_KEY_5
 	#define SECURITY_KEY_5     	0xab
-    #endif
-    #ifndef SECURITY_KEY_6
 	#define SECURITY_KEY_6		0xcd
-    #endif
-    #ifndef SECURITY_KEY_7
 	#define SECURITY_KEY_7		0xef
-    #endif
 #else
 	#define RFM12                  0
 	#define RFM_WIRE_MARIOJTAG     0
 	#define RFM_WIRE_JD_INTERNAL   0
-	#define RFM_WIRE_TK_INTERNAL   0
 	#define DISABLE_JTAG           0
 #endif
 
@@ -248,7 +239,11 @@ typedef enum { false, true } bool;
 #if RFM
 	#define VER_NAME "OpenHR20rfm"
 #else
-	#define VER_NAME "OpenHR20"
+	#ifdef COM_RS485
+		#define VER_NAME "OpenHR20SM"
+	#else
+		#define VER_NAME "OpenHR20S1"
+	#endif
 #endif
 
 #define VERSION_STRING  ":" VER_NAME " " STR(REVHIGH) "." STR(REVLOW) " " __DATE__ " " __TIME__ " " REVISION

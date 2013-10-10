@@ -61,7 +61,12 @@ void delay(uint16_t);                   // delay
 extern bool mode_auto;
 
 
-#define power_up_ADC() (PRR = (1<<PRTIM1)|(1<<PRSPI))  
-#define power_down_ADC() (PRR = (1<<PRTIM1)|(1<<PRSPI)|(1<<PRADC))  
+//#define power_up_ADC() (PRR = (1<<PRTIM1)|(1<<PRSPI))  
+//#define power_down_ADC() (PRR = (1<<PRTIM1)|(1<<PRSPI)|(1<<PRADC))  
+
+// Alternative macros which don't affect PRTIM1 bit
+// power-down macro also disables SPI, since we don't need it and doing it this way is unlikely to affect code operation
+#define power_up_ADC() (PRR &= ~(1<<PRADC))
+#define power_down_ADC() (PRR |= ((1<<PRADC) | (1<<PRSPI)))
 
 #endif /* MAIN_H */
